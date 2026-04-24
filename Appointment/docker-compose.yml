@@ -1,0 +1,31 @@
+version: '3.4'
+
+services:
+  AppointmentDb:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: appointment-db
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "TuPasswordFuerte123*"
+      MSSQL_PID: "Developer"
+    ports:
+      - "1433:1433"
+  
+  messagebroker:
+    image: rabbitmq:management
+    container_name: messagebroker
+    hostname: appointment-mq
+    environment:
+      - RABBITMQ_DEFAULT_USER=guest
+      - RABBITMQ_DEFAULT_PASS=guest
+    restart: always
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+
+  distributedcache:
+    image: redis
+    container_name: distributedcache
+    restart: always
+    ports:
+      - "6379:6379"
