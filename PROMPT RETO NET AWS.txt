@@ -1,0 +1,264 @@
+Actúa como un arquitecto/tech lead senior en .NET 8 + AWS + Pulumi + arquitectura event-driven. Quiero que trabajes sobre TODO mi workspace abierto en Visual Studio Code en la ruta:
+
+C:\Repositorios\NET AWS
+
+Dentro de esta ruta existen estos 4 proyectos principales:
+- Appointment
+- Appointment.Pe
+- Appointment.Cl
+- infra-pulumi
+
+Quiero que entiendas primero el contexto completo del reto técnico, el estado actual, lo ya validado y lo pendiente antes de proponer cambios. Tu trabajo debe ser preciso, incremental y alineado al diseño ya construido. No quiero que rehagas la arquitectura desde cero ni que cambies el enfoque tecnológico sin justificación. Quiero avanzar paso a paso.
+
+========================
+1. CONTEXTO GENERAL DEL RETO
+========================
+
+Tengo una arquitectura distribuida basada en eventos con AWS y .NET.
+
+### Solución 1: Appointment.Api
+Proyecto principal Web API en .NET.
+Características:
+- Clean Architecture
+- CQRS con MediatR
+- EF Core + SQL Server
+- Endpoint POST /appointments
+- Endpoint GET /appointments/{insuredId}
+- Guarda citas inicialmente en estado Pending
+- Publica evento AppointmentRequested a SNS
+- Tiene un worker/background service que debe consumir la cola appointment-completion y actualizar el estado a Completed en SQL Server
+
+### Solución 2: Appointment.Pe
+Lambda .NET para Perú.
+Características:
+- Consume mensajes desde SQS
+- Valida que countryISO = PE
+- Persiste resultado en DynamoDB
+- Publica evento AppointmentCompleted a EventBridge
+- Usa service pattern / capas, no MediatR
+
+### Solución 3: Appointment.Cl
+Lambda .NET para Chile.
+Características:
+- Igual que PE, pero para countryISO = CL
+- processedBy = appointment-cl
+
+### Solución 4: infra-pulumi
+Proyecto Pulumi con la infraestructura AWS.
+
+========================
+2. ARQUITECTURA OBJETIVO
+========================
+
+El flujo completo esperado es:
+
+Cliente
+-> Appointment.Api
+-> SQL Server (Pending)
+-> SNS Topic (AppointmentRequested)
+-> SQS por país (según countryISO)
+-> Lambda PE o CL
+-> DynamoDB por país
+-> EventBridge (AppointmentCompleted)
+-> SQS appointment-completion
+-> Appointment.Api background worker
+-> SQL Server (Completed)
+
+Este diseño ya estaba definido desde el inicio del reto. El objetivo es mantener coherencia con esta arquitectura y no desviarnos.
+
+========================
+3. INFRAESTRUCTURA AWS YA CONSTRUIDA
+========================
+
+En infra-pulumi ya existen:
+- SNS Topic: appointment-topic
+- SQS:
+  - appointment-pe
+  - appointment-cl
+  - appointment-completion
+  - DLQ para PE
+  - DLQ para CL
+- Suscripciones SNS -> SQS con filter policy por countryISO
+- DynamoDB:
+  - pe-appointments-table
+  - cl-appointments-table
+- IAM role para Lambdas
+- Lambdas:
+  - appointment-pe-lambda
+  - appointment-cl-lambda
+- Event source mappings SQS -> Lambda
+- EventBridge rule:
+  - source = appointment-pe / appointment-cl
+  - detail-type = AppointmentCompleted
+- Target EventBridge -> appointment-completion
+- Variables de entorno para Lambdas
+- ZIPs de Lambdas desplegables desde Pulumi
+
+========================
+4. COSAS QUE YA FUERON CORREGIDAS
+========================
+
+Ya se hicieron estos ajustes importantes en el código y/o infraestructura:
+
+1. En Appointment.Api:
+- Se alineó el publisher SNS para publicar un mensaje con contrato correcto
+- Se agregó message attribute countryISO
+- Se mantiene eventName como attribute adicional
+- El body del evento AppointmentRequested quedó alineado con lo que esperan las Lambdas:
+  - eventType
+  - eventId
+  - occurredAt
+  - appointmentId
+  - insuredId
+  - scheduleId
+  - countryISO
+  - status
+  - source
+
+2. En Appointment.Pe y Appointment.Cl:
+- Se corrigió el uso de AppointmentId como PK exacta de DynamoDB
+- Se ajustaron repositorios y entidades DynamoDB para usar AppointmentId correctamente
+
+3. En Appointment.Api:
+- Se ajustó el consumer SQS completion para soportar mensajes tipo EventBridge envelope con "detail"
+- Se amplió CompleteAppointmentMessage para soportar más campos
+
+4. En infra-pulumi:
+- Se corrigió la QueuePolicy SNS -> SQS
+- El bug estaba en que aws:SourceArn se estaba serializando mal porque se usaba topic.arn dentro de JSON.stringify sin resolver Output
+- Se corrigió usando pulumi.all([queue.arn, topic.arn]).apply(...)
+- Se agregaron comentarios detallados en index.ts
+
+5. En el empaquetado de Lambdas:
+- Se detectó y corrigió error de despliegue por .deps.json faltante
+- Se regeneraron correctamente los publish.zip a partir del contenido de dotnet publish
+- Ahora las Lambdas sí arrancan correctamente en AWS
+
+========================
+5. VALIDACIÓN DE FASE 2.5 YA COMPLETADA
+========================
+
+La fase 2.5 ya quedó validada end-to-end.
+
+Se probó manualmente publicando AppointmentRequested en SNS.
+Resultados confirmados:
+- SNS recibió correctamente el evento
+- SNS filtró por countryISO y lo envió a SQS PE
+- SQS disparó appointment-pe-lambda
+- La Lambda procesó correctamente el mensaje
+- La Lambda guardó el item en DynamoDB
+- Se validó item en pe-appointments-table con status Completed
+- La Lambda publicó AppointmentCompleted a EventBridge
+- EventBridge hizo match con la regla appointment-completed-rule
+- EventBridge envió el mensaje a appointment-completion
+- Se validó que la cola appointment-completion recibió el mensaje final
+
+Conclusión:
+La arquitectura event-driven base ya funciona end-to-end en AWS. Esto ya NO está pendiente.
+
+========================
+6. QUÉ NO QUIERO QUE HAGAS
+========================
+
+- No quiero que propongas rehacer la arquitectura
+- No quiero mover esto a otro stack
+- No quiero cambiar Fargate por otra opción salvo que haya una razón muy sólida
+- No quiero respuestas genéricas
+- No quiero grandes bloques teóricos si no aportan a la ejecución
+- No quiero perder tiempo en cosas ya validadas de Fase 2.5
+- No quiero que supongas cosas sin revisar el código real del workspace
+
+========================
+7. FASE ACTUAL: INICIAR FASE 3
+========================
+
+Ahora quiero desarrollar la Fase 3 desde Visual Studio Code.
+
+Objetivo de Fase 3:
+- desplegar Appointment.Api en AWS
+- preferiblemente usando ECS Fargate
+- conectar la API con SNS
+- conectar el background worker con SQS completion
+- preparar SQL Server / RDS o al menos dejar la integración lista
+- mantener coherencia con Clean Architecture y el estilo actual de la solución
+- hacerlo paso a paso
+
+========================
+8. FORMA DE TRABAJAR QUE QUIERO
+========================
+
+Quiero que trabajes así:
+
+1. Primero revisa el código real del workspace
+2. Identifica cómo está hoy Appointment.Api
+3. Confirma si ya existe o no:
+   - Dockerfile
+   - Program.cs preparado para contenedor
+   - registro del background worker
+   - configuración AWS por variables de entorno
+   - configuración de SQL Server
+   - capa Infrastructure para SNS/SQS
+4. Luego dime exactamente:
+   - qué ya está listo
+   - qué falta
+   - qué archivo hay que tocar
+   - qué cambio proponer
+5. Quiero que avancemos incrementalmente:
+   - Paso 1
+   - Paso 2
+   - Paso 3
+6. Antes de proponer código grande, primero explica el objetivo del paso
+7. Si propones cambios, hazlos alineados al código existente del workspace
+8. Prioriza cambios pequeños y correctos
+9. Si detectas un riesgo arquitectónico, dilo explícitamente
+10. Si detectas que ya existe algo implementado, no lo dupliques
+
+========================
+9. PRIMERA TAREA QUE QUIERO QUE HAGAS
+========================
+
+Empieza revisando el proyecto Appointment.Api dentro del workspace y dime:
+
+1. Si ya está listo para ser dockerizado
+2. Si ya existe Dockerfile o cuál debería ser
+3. Si el Program.cs ya registra correctamente:
+   - controllers
+   - dependencias
+   - publisher SNS
+   - background worker de SQS completion
+4. Cómo está leyendo la configuración:
+   - appsettings
+   - variables de entorno
+5. Qué necesita para correr en ECS Fargate
+6. Qué dependencias faltan para publicar en AWS
+7. Qué piezas de infraestructura nuevas habrá que agregar en infra-pulumi para la Fase 3
+
+Quiero que tu respuesta inicial sea en este formato:
+
+- Estado actual de Appointment.Api
+- Hallazgos
+- Riesgos
+- Qué falta para Fase 3
+- Paso 1 recomendado
+
+No me des todavía todo el código de golpe.
+Primero quiero diagnóstico real basado en los archivos del workspace.
+
+========================
+10. INFORMACIÓN IMPORTANTE ADICIONAL
+========================
+
+Ten en cuenta estas decisiones ya tomadas:
+
+- Runtime principal: .NET 8
+- Lambdas PE/CL ya funcionan
+- Pulumi ya gestiona la infraestructura actual
+- SNS topic ya existe
+- appointment-completion queue ya existe
+- EventBridge rule ya existe
+- El flujo event-driven ya fue validado
+- La siguiente meta no es revalidar Fase 2.5, sino integrar la API real y llevarla a AWS
+- Quiero mantener enfoque pragmático y orientado al reto técnico
+- Quiero que me ayudes como si fueras un tech lead guiando la implementación final
+
+Empieza revisando Appointment.Api y guiándome con el Paso 1 de Fase 3.

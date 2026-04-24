@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\Appointment.Cl.Application\Appointment.Cl.Application.csproj" />
+    <ProjectReference Include="..\Appointment.Cl.Domain\Appointment.Cl.Domain.csproj" />
+    <ProjectReference Include="..\Appointment.Cl.CrossCutting\Appointment.Cl.CrossCutting.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="AWSSDK.Extensions.NETCore.Setup" Version="3.7.1" />
+    <PackageReference Include="AWSSDK.DynamoDBv2" Version="3.7.300.10" />
+    <PackageReference Include="AWSSDK.EventBridge" Version="3.7.301" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>Appointment.Cl.Infrastructure</RootNamespace>
+  </PropertyGroup>
+
+</Project>

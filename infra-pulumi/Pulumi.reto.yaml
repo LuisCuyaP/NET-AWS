@@ -1,0 +1,4 @@
+config:
+  aws:region: us-east-1
+  infra-pulumi:sqlAdminPassword:
+    secure: AAABAG9AXKCc0obpwOr1zwOBHdg6O9+FO4iex9M7dJGKdqvxgUg5cPvlqVaZaKylqmmDELKanA==

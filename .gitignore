@@ -1,0 +1,15 @@
+# Build outputs
+**/bin/
+**/obj/
+
+# Visual Studio
+.vs/
+
+# Pulumi local state
+**/.pulumi/
+
+# Packaging outputs
+**/publish*.zip
+
+# Local credentials / notes
+CUENTA AMAZON.txt

@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="Appointment.Cl.Lambda/Appointment.Cl.Lambda.csproj" />
+  <Project Path="Appointment.Cl.Application/Appointment.Cl.Application.csproj" />
+  <Project Path="Appointment.Cl.Domain/Appointment.Cl.Domain.csproj" />
+  <Project Path="Appointment.Cl.Infrastructure/Appointment.Cl.Infrastructure.csproj" />
+  <Project Path="Appointment.Cl.CrossCutting/Appointment.Cl.CrossCutting.csproj" />
+</Solution>
